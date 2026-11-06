@@ -1,9 +1,9 @@
 {
   "pluginId": "neodex.orbite",
   "repo": "NDesumeur/neodex-plugin-orbite",
-  "version": "1.0.0",
-  "sha256": "66c3f0c980c03c902f799cd246adb1a16c2228ce2d2913985291a35977b0d91d",
-  "approvedAt": "2026-11-05T09:31:54.746Z",
+  "version": "1.0.1",
+  "sha256": "3441d1915b0cf314626f14b02835a8905f116072f534d2ce288620ba5d0ec5b6",
+  "approvedAt": "2026-11-06T21:35:48.012Z",
   "neobase": ">=4.0.0",
-  "signature": "ZNRxgM9LSNf7tq2EDRuOgjE765FuglHl5v/BgCvpKf865J3JuzffsCJ372XX8gA7KQsGNFrOk3byV7Zl7mq3DQ=="
+  "signature": "ZQfW7nfcwwQPBbBdQCUMXWd/nLrwLi3o6BXemKIDDMbPczkQkDWIJNcYTvNGK60jwv6X/rqOFnRYBYvh2j2pDA=="
 }
