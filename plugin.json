@@ -1,7 +1,7 @@
 {
   "id": "neodex.orbite",
   "name": "Orbite",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "NDesumeur",
   "description": "Un petit vaisseau tourne autour d'un soleil sur trois orbites. Saute d'une orbite à l'autre pour éviter les astéroïdes, ramasse les cristaux, fuis les éruptions.",
   "icon": "icon.png",
