@@ -3,7 +3,7 @@
   "name": "Orbite",
   "version": "1.0.1",
   "author": "NDesumeur",
-  "description": "Un petit vaisseau tourne autour d'un soleil sur trois orbites. Saute d'une orbite à l'autre pour éviter les astéroïdes, ramasse les cristaux, fuis les éruptions.",
+  "description": "Jeu d'adresse à une touche : ton vaisseau tourne seul autour d'un soleil sur trois orbites, tu choisis seulement laquelle. Évite les astéroïdes qui traversent l'écran, quitte l'orbite intérieure quand le soleil clignote avant l'éruption, ramasse les cristaux à la suite pour un multiplicateur jusqu'à ×5. La vitesse monte, record et statistiques gardés.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "orbite",
