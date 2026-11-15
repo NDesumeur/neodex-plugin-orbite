@@ -2,21 +2,23 @@
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
   <div class="agHead"><span class="label">Orbite</span><span class="hint">Espace, clic ou ↑ : vers l'extérieur · ↓ ou clic droit : vers l'intérieur · P : pause</span></div>
-  <div class="gMain"><div class="gameBox"><canvas id="obCanvas" width="216" height="288"></canvas></div>
+  <div class="gMain"><div class="gameBox"><canvas id="obCanvas" width="288" height="288"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="obStats"></div></div>
-      <div class="row"><button class="btn main" id="obNew">NOUVELLE PARTIE</button></div>
+      <div class="row"><button class="btn main" id="obNew">NOUVELLE PARTIE</button><button class="btn" id="obFs">PLEIN ÉCRAN</button></div>
       <div class="hint">Le soleil clignote : l'orbite intérieure va brûler. Plus tu tiens, plus le vaisseau et les astéroïdes vont vite.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:2;min-width:320px;position:relative}
+.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:1 1 360px;min-width:min(100%,320px);position:relative}
+.gameBox:fullscreen{padding:0}
 .gameBox canvas{width:100%;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
 .gSide .sysCard{display:flex;flex-direction:column}
 .gStats{display:grid;grid-template-columns:1fr auto;gap:4px 14px}
 .gStats b{text-align:right}
-.gameBox canvas{max-width:460px;aspect-ratio:216/288}`;
+.gameBox canvas{width:min(100%,max(280px,calc(100vh - 170px)));height:auto;aspect-ratio:1}
+.gameBox:fullscreen canvas{width:min(100vw,100vh)}`;
 /* ---------- l'habillage pixel art, dessiné à la main : police bitmap (accents compris), cadres, boutons, icônes ----------
    Tout est en pixels pleins, agrandis par 2 sans lissage : aucun dégradé, aucune ombre floue. */
 const PXK = (() => {
@@ -293,7 +295,7 @@ export default async function (ctx) {
   tile: ['................', '..........:.....', '................', '...+............', '................', '................', '.............:..', '................',
     '................', '.....:..........', '................', '................', '..........+.....', '................', '..:.............', '................'] },
   emblem: ['....kkkkk....', '..kkyyyyykk..', '.kyyyoooyyyk.', '.kyoorrrooyk.', 'kyyorrrrroyyk', 'kyorrwwrrroyk', 'kyorrwrrrroyk', 'kyyorrrrroyyk', '.kyoorrrooyk.', '.kyyyoooyyyk.', '..kkyyyyykk..', '....kkkkk....'],
-  icons: [[/^NOUVELLE/, 'play'], [/^RECORDS/, 'crown']] });
+  icons: [[/^NOUVELLE/, 'play'], [/^PLEIN/, 'full'], [/^RECORDS/, 'crown']] });
   const $ = id => view.querySelector('#' + id) || document.getElementById(id);
   const doc = async n => { try { return await folder.read(n); } catch { return null; } };
   const games = { best: {}, ...(await doc('games')) };
@@ -325,7 +327,7 @@ const pxFont = (g, text, x, y, color, size = 8, align = 'left') => { const s = P
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
 /* ---------- Orbite : le vaisseau tourne seul, le joueur ne choisit que l'orbite ---------- */
-const OB = {W: 216, H: 288, CX: 108, CY: 150, RINGS: [38, 66, 94]};
+const OB = {W: 288, H: 288, CX: 144, CY: 154, RINGS: [50, 86, 122]};
 const obs = gstore('orbite', {games: 0, gems: 0, flares: 0});
 let ob = null;
 const obCanvas = (w, h, fn) => { const c = el('canvas'); c.width = w; c.height = h; fn(c.getContext('2d')); return c; };
@@ -343,7 +345,7 @@ function obNew() {
   ob = Object.assign(ob || {tick: 0, raf: 0}, {seen: ob ? ob.tick : 0, mode: 'ready', ring: 1, r: OB.RINGS[1], a: -Math.PI / 2, rocks: [], gems: [], t: 0, got: 0, combo: 1, flare: 600, burn: 0, spawn: 60, record: false, dead: 0, boom: 0, trail: []});
   for (let i = 0; i < 3; i++) obGem();
 }
-const obSpeed = () => .018 + Math.min(.022, ob.t / 12000);
+const obSpeed = () => .014 + Math.min(.017, ob.t / 15500);
 function obGem() { ob.gems.push({ring: Math.floor(Math.random() * 3), a: Math.random() * Math.PI * 2}); }
 let obac = null;
 function obBeep(f, d, type = 'square', slide = 0) { try { obac ??= new AudioContext(); const o = obac.createOscillator(), g = obac.createGain(), t = obac.currentTime; o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d); g.gain.setValueAtTime(.045, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(obac.destination); o.start(t); o.stop(t + d + .02); } catch {} }
@@ -364,7 +366,7 @@ function obUpdate() {
   const [sx, sy] = obPos(0, ob.a, ob.r); ob.trail.unshift([sx, sy]); ob.trail.length = Math.min(ob.trail.length, 10);
   // astéroïdes : ils entrent par un bord et traversent en visant près du soleil
   if (--ob.spawn <= 0) {
-    const side = Math.random() * Math.PI * 2, ex = OB.CX + Math.cos(side) * 190, ey = OB.CY + Math.sin(side) * 190, tx = OB.CX + (Math.random() - .5) * 120, ty = OB.CY + (Math.random() - .5) * 120, d = Math.hypot(tx - ex, ty - ey), v = .7 + Math.random() * .5 + Math.min(1, ob.t / 5000);
+    const side = Math.random() * Math.PI * 2, ex = OB.CX + Math.cos(side) * 235, ey = OB.CY + Math.sin(side) * 235, tx = OB.CX + (Math.random() - .5) * 160, ty = OB.CY + (Math.random() - .5) * 160, d = Math.hypot(tx - ex, ty - ey), v = .7 + Math.random() * .5 + Math.min(1, ob.t / 5000);
     const s = Math.floor(Math.random() * 3); ob.rocks.push({x: ex, y: ey, vx: (tx - ex) / d * v, vy: (ty - ey) / d * v, s, r: [5, 7, 10][s], life: 600});
     ob.spawn = Math.max(22, 80 - ob.t / 90) * (.6 + Math.random() * .8);
   }
@@ -386,15 +388,15 @@ function obDraw() {
   for (let i = 0; i < 60; i++) { const x = (i * 73 + 11) % W, y = (i * 41 + Math.floor(ob.tick / (8 + i % 3 * 4))) % H; px(g, i % 7 ? '#3a2e6a' : '#b0a8d8', x, y, 1, 1); }
   // les orbites en pointillés ; l'intérieure rougit pendant une éruption
   const warn = ob.flare > 0 && ob.flare < 120, burn = ob.flare <= 0 && ob.burn > 0;
-  RINGS.forEach((R, i) => { const hot = i === 0 && (burn || warn && Math.floor(ob.tick / 6) % 2), n = Math.round(R * .9);
-    for (let k = 0; k < n; k++) { if (k % 2 && !hot) continue; const a = k / n * Math.PI * 2; px(g, hot ? (burn ? '#ff6a2a' : '#ff4a5a') : i === ob.ring ? '#5ec8ff' : '#2e2a5a', CX + Math.cos(a) * R, CY + Math.sin(a) * R, burn && i === 0 ? 2 : 1, burn && i === 0 ? 2 : 1); } });
+  RINGS.forEach((R, i) => { const hot = i === 0 && (burn || warn && Math.floor(ob.tick / 6) % 2), n = Math.round(R * 1.3);
+    for (let k = 0; k < n; k++) { if (k % 2 && !hot) continue; const a = k / n * Math.PI * 2; px(g, hot ? (burn ? '#ff6a2a' : '#ff4a5a') : i === ob.ring ? '#5ec8ff' : '#3e3878', CX + Math.cos(a) * R, CY + Math.sin(a) * R, burn && i === 0 ? 2 : 1, burn && i === 0 ? 2 : 1); } });
   // le soleil : disque en anneaux, flammes qui ondulent
-  const sr = 16 + (burn ? 4 : 0) + Math.round(Math.sin(ob.tick / 10));
+  const sr = 22 + (burn ? 5 : 0) + Math.round(Math.sin(ob.tick / 10));
   for (let y = -sr - 3; y <= sr + 3; y++) for (let x = -sr - 3; x <= sr + 3; x++) {
     const d = Math.hypot(x, y), a = Math.atan2(y, x), edge = sr + Math.sin(a * 7 + ob.tick / 6) * 1.6;
     if (d > edge + 1) continue; px(g, d > edge ? '#1a0a2a' : d > edge - 3 ? '#ff6a2a' : d > sr * .55 ? '#ffa030' : d > sr * .3 ? '#ffd84a' : '#fff4a0', CX + x, CY + y);
   }
-  const eye = warn || burn ? '#1a0a2a' : null; if (eye) { px(g, eye, CX - 6, CY - 3, 3, 3); px(g, eye, CX + 3, CY - 3, 3, 3); px(g, eye, CX - 3, CY + 4, 6, 2); }
+  const eye = warn || burn ? '#1a0a2a' : null; if (eye) { px(g, eye, CX - 8, CY - 4, 4, 4); px(g, eye, CX + 4, CY - 4, 4, 4); px(g, eye, CX - 4, CY + 5, 8, 3); }
   for (const gm of ob.gems) { const [x, y] = obPos(gm.ring, gm.a); g.drawImage(OB_GEM, Math.round(x - 3), Math.round(y - 4 + Math.sin(ob.tick / 8 + gm.a * 3))); }
   for (const k of ob.rocks) g.drawImage(OB_ROCKS[k.s], Math.round(k.x - k.r - 1), Math.round(k.y - k.r - 1));
   // la traînée puis le vaisseau, orienté selon sa course (pas de 1/16 de tour)
@@ -404,7 +406,7 @@ function obDraw() {
   else for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, d = (20 - ob.boom) * 1.3 + 2; px(g, i % 2 ? '#ffa030' : '#fff4a0', sx + Math.cos(a) * d, sy + Math.sin(a) * d, 2, 2); }
   pxFont(g, String(obScore()), 6, 14, '#ffffff', 12);
   if (ob.combo > 1) pxFont(g, 'x' + ob.combo, W - 6, 14, '#5aff9a', 12, 'right');
-  if (warn) PXK.fill(g, 'ÉRUPTION !', W / 2, 30, Math.floor(ob.tick / 6) % 2 ? '#ff4a5a' : '#ffd84a', PXK.scale(8), 'center');
+  if (warn) PXK.fill(g, 'ÉRUPTION !', W / 2, 22, Math.floor(ob.tick / 6) % 2 ? '#ff4a5a' : '#ffd84a', PXK.scale(8), 'center');
   if (ob.mode === 'ready') gameText(g, W, [['ORBITE', '#ffa030', 16], ['Espace ou clic pour partir', '#ffffff'], ['↑ dehors · ↓ dedans', '#b0a8d8'], ['Record ' + (games.best.orbite || 0), '#ffd84a']], 236);
   if (ob.mode === 'pause') gameText(g, W, [['PAUSE', '#ffffff', 12], ['Espace pour reprendre', '#b0a8d8']], 240);
   if (ob.mode === 'over' && ob.dead > 20) gameText(g, W, [['PERDU DANS L\'ESPACE', '#ff4a5a', 12], ['Score ' + obScore(), '#ffffff'], ['Cristaux ' + ob.got + ' · ' + Math.floor(ob.t / 60) + ' s', '#5aff9a'], [ob.record ? 'NOUVEAU RECORD !' : 'Record ' + (games.best.orbite || 0), '#ffd84a'], [ob.dead > 40 ? 'Espace pour rejouer' : '', '#b0a8d8']], 216);
@@ -421,6 +423,8 @@ document.addEventListener('keydown', e => {
 $('obCanvas').onpointerdown = e => { e.preventDefault(); if (ob) obMove(e.button === 2 ? -1 : 1); };
 $('obCanvas').oncontextmenu = e => e.preventDefault();
 $('obNew').onclick = () => { obNew(); $('obNew').blur(); };
+$('obFs').onclick = () => { $('obFs').blur(); try { document.fullscreenElement ? document.exitFullscreen() : $('obCanvas').parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
+$('obCanvas').__ob = {st: () => ob, OB};
 {  // vérification : un astéroïde sur le vaisseau le détruit ; l'éruption brûle l'orbite intérieure seulement
   const keep = ob, realBest = games.best.orbite, realStats = {...obs}; ob = null;
   obNew(); ob.mode = 'play'; ob.spawn = 1e9; const [x, y] = obPos(1, ob.a + obSpeed()); ob.rocks = [{x, y, vx: 0, vy: 0, s: 0, r: 5, life: 99}]; obUpdate(); const hit = ob.mode === 'over';

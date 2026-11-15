@@ -11,6 +11,10 @@ A one-button skill game: your ship circles a sun on its own, on one of three orb
 - **P**: pause.
 - **Space** or **click**: set off, then play again after a crash.
 
+## Full screen
+
+The **Full screen** button fills the whole screen with the solar system (Escape to leave). Otherwise the game takes all the height the window leaves.
+
 ## Dangers
 
 - **Asteroids**: in three sizes, they come in from an edge of the screen and cross it aiming close to the sun. They come more and more often. A single touch ends the game.

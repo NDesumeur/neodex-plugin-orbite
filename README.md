@@ -11,6 +11,10 @@ Un jeu d'adresse à une touche : ton vaisseau tourne tout seul autour d'un solei
 - **P** : pause.
 - **Espace** ou **clic** : partir, puis rejouer après une collision.
 
+## Plein écran
+
+Le bouton **Plein écran** agrandit le système solaire à tout l'écran (Échap pour en sortir). Hors plein écran, le jeu prend toute la hauteur que laisse la fenêtre.
+
 ## Les dangers
 
 - **Astéroïdes** : de trois tailles, ils entrent par un bord de l'écran et traversent en visant près du soleil. Ils arrivent de plus en plus souvent. Un seul contact et la partie est finie.
