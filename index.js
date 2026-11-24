@@ -1,12 +1,13 @@
 // Orbite : Un petit vaisseau tourne autour d'un soleil sur trois orbites. Saute d'une orbite à l'autre pour éviter les astéroïdes, ramasse les cristaux, fuis les éruptions.
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
-  <div class="agHead"><span class="label">Orbite</span><span class="hint">Espace, clic ou ↑ : vers l'extérieur · ↓ ou clic droit : vers l'intérieur · P : pause</span></div>
+  <div class="agHead"><span class="label">Orbite</span><span class="hint">↑ ou clic : dehors · ↓ ou clic droit : dedans · ← frein · → turbo · X : tir · P : pause</span></div>
   <div class="gMain"><div class="gameBox"><canvas id="obCanvas" width="288" height="288"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="obStats"></div></div>
       <div class="row"><button class="btn main" id="obNew">NOUVELLE PARTIE</button><button class="btn" id="obFs">PLEIN ÉCRAN</button></div>
       <div class="hint">Le soleil clignote : l'orbite intérieure va brûler. Plus tu tiens, plus le vaisseau et les astéroïdes vont vite.</div>
+      <div class="hint">Toutes les 40 secondes, un nouveau système stellaire : naine rouge, pulsar, géante bleue… Les orbites s'étirent en ellipses, et certaines tournent. Maintiens → pour le turbo (il use l'énergie, mais les points comptent double) ou ← pour freiner. Les bonus sur les orbites : bouclier (un choc), aimant (les cristaux viennent à toi), ralenti (les astéroïdes traînent) et canon (5 tirs avec X, 5 points par astéroïde détruit).</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
@@ -328,7 +329,11 @@ const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStar
 
 /* ---------- Orbite : le vaisseau tourne seul, le joueur ne choisit que l'orbite ---------- */
 const OB = {W: 288, H: 288, CX: 144, CY: 154, RINGS: [50, 86, 122]};
-const obs = gstore('orbite', {games: 0, gems: 0, flares: 0});
+const obs = gstore('orbite', {games: 0, gems: 0, flares: 0}); obs.rocks ??= 0; obs.systems ??= 0;
+const OB_SYS = [{name: 'Soleil jaune', e: 0, spin: 0, sun: ['#ff6a2a', '#ffa030', '#ffd84a', '#fff4a0']}, {name: 'Naine rouge', e: .12, spin: 0, sun: ['#a01a2a', '#e03a3a', '#ff6a4a', '#ffb090']},
+  {name: 'Pulsar', e: .17, spin: .0025, sun: ['#6a5aff', '#a8a0ff', '#e0dcff', '#ffffff']}, {name: 'Géante bleue', e: .21, spin: -.0035, sun: ['#1a5ab0', '#3a9aff', '#8ad0ff', '#e8f8ff']}];
+const OB_BONUS = {shield: {name: 'Bouclier', c: '#5ec8ff'}, mag: {name: 'Aimant', c: '#ff5a8a'}, slow: {name: 'Ralenti', c: '#b070ff'}, gun: {name: 'Canon', c: '#ffd84a'}};
+const OB_SYSLEN = 2400;
 let ob = null;
 const obCanvas = (w, h, fn) => { const c = el('canvas'); c.width = w; c.height = h; fn(c.getContext('2d')); return c; };
 const OB_SHIP = obCanvas(9, 9, g => sprite(g, ['....k....', '...kck...', '...kck...', '..kcwck..', '..kcccck.', '.kcckcck.', 'kccckccck', 'kooko.kok', '.o.....o.'].map(r => r.padEnd(9, '.')), 0, 0, {k: '#05020f', c: '#5ec8ff', w: '#e8f8ff', o: '#ffa030'}));
@@ -342,7 +347,7 @@ const OB_ROCKS = [5, 7, 10].map((r, i) => obCanvas(r * 2 + 2, r * 2 + 2, g => { 
 }));
 const OB_GEM = obCanvas(7, 9, g => sprite(g, ['...k...', '..kwk..', '.kwgck.', 'kwggcck', 'kgggcck', '.kggck.', '..kgk..', '...k...', '.......'], 0, 0, {k: '#05020f', w: '#ffffff', g: '#5aff9a', c: '#1a8a5a'}));
 function obNew() {
-  ob = Object.assign(ob || {tick: 0, raf: 0}, {seen: ob ? ob.tick : 0, mode: 'ready', ring: 1, r: OB.RINGS[1], a: -Math.PI / 2, rocks: [], gems: [], t: 0, got: 0, combo: 1, flare: 600, burn: 0, spawn: 60, record: false, dead: 0, boom: 0, trail: []});
+  ob = Object.assign(ob || {tick: 0, raf: 0}, {seen: ob ? ob.tick : 0, mode: 'ready', ring: 1, r: OB.RINGS[1], a: -Math.PI / 2, rocks: [], gems: [], t: 0, got: 0, combo: 1, flare: 600, burn: 0, spawn: 60, record: false, dead: 0, boom: 0, trail: [], e: 0, rot: 0, sys: 0, banner: 0, energy: 100, boost: false, brake: false, dist: 0, items: [], nItem: 600, shield: 0, mag: 0, slow: 0, ammo: 0, shots: [], inv: 0, kills: 0, bits: []});
   for (let i = 0; i < 3; i++) obGem();
 }
 const obSpeed = () => .014 + Math.min(.017, ob.t / 15500);
@@ -355,14 +360,27 @@ function obMove(dir) {
   if (ob.mode === 'over') { if (ob.dead > 40) obNew(); return; }
   ob.ring = (ob.ring + dir + 3) % 3; obBeep(dir > 0 ? 520 : 390, .06, 'square', dir > 0 ? 780 : 260);
 }
-const obPos = (ring, a, r = OB.RINGS[ring]) => [OB.CX + Math.cos(a) * r, OB.CY + Math.sin(a) * r];
+const obPos = (ring, a, r = OB.RINGS[ring]) => {  // une orbite en ellipse (grand axe = le rayon, petit axe aplati par e), tournée de rot
+  const e = ob ? ob.e : 0, t = ob ? ob.rot : 0, X = Math.cos(a) * r, Y = Math.sin(a) * r * (1 - 2 * e);
+  return [OB.CX + X * Math.cos(t) - Y * Math.sin(t), OB.CY + X * Math.sin(t) + Y * Math.cos(t)];
+};
+const obMult = () => ob.boost && ob.energy > 0 ? 1.8 : ob.brake ? .5 : 1;
 function obDie() { ob.mode = 'over'; ob.dead = 0; ob.boom = 20; obBeep(150, .5, 'sawtooth', 40); ob.record = best('orbite', obScore()); obs.gems += ob.got; saveGames(); obInfo(); }
-const obScore = () => Math.floor(ob.t / 30) + ob.got * 10;
+const obScore = () => Math.floor(ob.dist / 30) + ob.got * 10 + ob.kills * 5;
+function obFire() {
+  if (ob.mode !== 'play' || ob.ammo <= 0) return; ob.ammo--; const [x0, y0] = obPos(0, ob.a, ob.r), [x1, y1] = obPos(0, ob.a + .01, ob.r), d = Math.hypot(x1 - x0, y1 - y0) || 1;
+  ob.shots.push({x: x0, y: y0, vx: (x1 - x0) / d * 4, vy: (y1 - y0) / d * 4, life: 70}); obBeep(1200, .08, 'square', 500);
+}
 function obUpdate() {
   if (ob.boom) ob.boom--;
   if (ob.mode === 'over') { ob.dead++; return; }
   if (ob.mode !== 'play') { ob.a += .01; return; }
-  ob.t++; ob.a += obSpeed(); ob.r += (OB.RINGS[ob.ring] - ob.r) * .3;
+  ob.t++; const m = obMult(); ob.a += obSpeed() * m; ob.dist += m > 1 ? 2 : m; ob.r += (OB.RINGS[ob.ring] - ob.r) * .3;
+  if (ob.boost && ob.energy > 0) ob.energy = Math.max(0, ob.energy - .8); else if (!ob.boost) ob.energy = Math.min(100, ob.energy + .3);
+  // le système stellaire change toutes les 40 s : les orbites s'étirent doucement et peuvent tourner
+  const S = OB_SYS[ob.sys % OB_SYS.length]; ob.e += (S.e - ob.e) * .01; ob.rot += S.spin;
+  if (ob.t % OB_SYSLEN === 0) { ob.sys++; obs.systems++; ob.banner = 150; obBeep(330, .5, 'triangle', 990); }
+  if (ob.banner) ob.banner--; for (const k of ['shield', 'mag', 'slow', 'inv']) if (ob[k] > 0 && k !== 'shield') ob[k]--;
   const [sx, sy] = obPos(0, ob.a, ob.r); ob.trail.unshift([sx, sy]); ob.trail.length = Math.min(ob.trail.length, 10);
   // astéroïdes : ils entrent par un bord et traversent en visant près du soleil
   if (--ob.spawn <= 0) {
@@ -370,16 +388,25 @@ function obUpdate() {
     const s = Math.floor(Math.random() * 3); ob.rocks.push({x: ex, y: ey, vx: (tx - ex) / d * v, vy: (ty - ey) / d * v, s, r: [5, 7, 10][s], life: 600});
     ob.spawn = Math.max(22, 80 - ob.t / 90) * (.6 + Math.random() * .8);
   }
-  for (const k of ob.rocks) { k.x += k.vx; k.y += k.vy; k.life--; if (Math.hypot(k.x - sx, k.y - sy) < k.r + 2.5) return obDie(); }
-  ob.rocks = ob.rocks.filter(k => k.life > 0);
+  const rs = ob.slow ? .4 : 1;
+  for (const k of ob.rocks) { k.x += k.vx * rs; k.y += k.vy * rs; k.life -= rs; if (!ob.inv && Math.hypot(k.x - sx, k.y - sy) < k.r + 2.5) { if (ob.shield) { ob.shield = 0; ob.inv = 60; k.life = 0; obBits(k.x, k.y, '#5ec8ff'); obBeep(500, .25, 'sawtooth', 200); } else return obDie(); } }
+  for (const s of ob.shots) { s.x += s.vx; s.y += s.vy; s.life--; for (const k of ob.rocks) if (k.life > 0 && Math.hypot(k.x - s.x, k.y - s.y) < k.r + 2) { k.life = 0; s.life = 0; ob.kills++; obs.rocks++; obBits(k.x, k.y, '#8a7a9a'); obBeep(220, .2, 'square', 80); } }
+  ob.shots = ob.shots.filter(s => s.life > 0); ob.rocks = ob.rocks.filter(k => k.life > 0);
+  for (const b of ob.bits) { b.x += b.vx; b.y += b.vy; b.t--; } ob.bits = ob.bits.filter(b => b.t > 0);
+  // les bonus : un à la fois, posé sur une orbite
+  if (!ob.items.length && --ob.nItem <= 0) { const ks = Object.keys(OB_BONUS); ob.items.push({ring: Math.floor(Math.random() * 3), a: ob.a + 2 + Math.random() * 3, kind: ks[Math.floor(Math.random() * ks.length)], life: 900}); ob.nItem = 600 + Math.floor(Math.random() * 400); }
+  for (const it of ob.items) { it.life--; const [ix, iy] = obPos(it.ring, it.a); if (Math.hypot(ix - sx, iy - sy) < 8) { it.got = true; if (it.kind === 'shield') ob.shield = 1; else if (it.kind === 'gun') ob.ammo += 5; else ob[it.kind] = 480; obBeep(880, .3, 'triangle', 1760); } }
+  ob.items = ob.items.filter(it => !it.got && it.life > 0);
+  if (ob.mag) for (const gm of ob.gems) { const [gx, gy] = obPos(gm.ring, gm.a); if (Math.hypot(gx - sx, gy - sy) < 70) { gm.ring = ob.ring; gm.a += Math.sign(((ob.a - gm.a) % 6.283 + 9.425) % 6.283 - 3.1416) * .04; } }
   // éruption : 2 s d'alerte, puis l'orbite intérieure brûle 2 s
   if (--ob.flare === 0) { ob.burn = 120; obBeep(90, 1.2, 'sawtooth', 60); }
   if (ob.flare < 0 && ob.burn > 0) { ob.burn--; if (ob.ring === 0 && Math.abs(ob.r - OB.RINGS[0]) < 6) return obDie(); if (!ob.burn) { ob.flare = 900 + Math.floor(Math.random() * 600); obs.flares++; } }
   if (ob.flare === 120) obBeep(880, .1);
-  for (const gm of ob.gems) { const [gx, gy] = obPos(gm.ring, gm.a); if (Math.hypot(gx - sx, gy - sy) < 7) { gm.got = true; ob.got += ob.combo; ob.combo = Math.min(5, ob.combo + 1); obBeep(1046 + ob.combo * 100, .08, 'square', 1568); } }
+  for (const gm of ob.gems) { const [gx, gy] = obPos(gm.ring, gm.a); if (Math.hypot(gx - sx, gy - sy) < (ob.mag ? 10 : 7)) { gm.got = true; ob.got += ob.combo; ob.combo = Math.min(5, ob.combo + 1); obBeep(1046 + ob.combo * 100, .08, 'square', 1568); } }
   if (ob.gems.some(g => g.got)) { ob.gems = ob.gems.filter(g => !g.got); obGem(); }
   if (ob.t % 600 === 0) ob.combo = 1;  // le multiplicateur retombe toutes les 10 s
 }
+function obBits(x, y, c) { for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; ob.bits.push({x, y, vx: Math.cos(a) * 1.2, vy: Math.sin(a) * 1.2, t: 22, c}); } }
 function obDraw() {
   const g = ob.g, {W, H, CX, CY, RINGS} = OB;
   for (; ob.seen < ob.tick; ob.seen++) if (ob.mode !== 'play') obUpdate();
@@ -389,50 +416,71 @@ function obDraw() {
   // les orbites en pointillés ; l'intérieure rougit pendant une éruption
   const warn = ob.flare > 0 && ob.flare < 120, burn = ob.flare <= 0 && ob.burn > 0;
   RINGS.forEach((R, i) => { const hot = i === 0 && (burn || warn && Math.floor(ob.tick / 6) % 2), n = Math.round(R * 1.3);
-    for (let k = 0; k < n; k++) { if (k % 2 && !hot) continue; const a = k / n * Math.PI * 2; px(g, hot ? (burn ? '#ff6a2a' : '#ff4a5a') : i === ob.ring ? '#5ec8ff' : '#3e3878', CX + Math.cos(a) * R, CY + Math.sin(a) * R, burn && i === 0 ? 2 : 1, burn && i === 0 ? 2 : 1); } });
+    for (let k = 0; k < n; k++) { if (k % 2 && !hot) continue; const a = k / n * Math.PI * 2, [x, y] = obPos(i, a); px(g, hot ? (burn ? '#ff6a2a' : '#ff4a5a') : i === ob.ring ? '#5ec8ff' : '#3e3878', x, y, burn && i === 0 ? 2 : 1, burn && i === 0 ? 2 : 1); } });
   // le soleil : disque en anneaux, flammes qui ondulent
   const sr = 22 + (burn ? 5 : 0) + Math.round(Math.sin(ob.tick / 10));
   for (let y = -sr - 3; y <= sr + 3; y++) for (let x = -sr - 3; x <= sr + 3; x++) {
     const d = Math.hypot(x, y), a = Math.atan2(y, x), edge = sr + Math.sin(a * 7 + ob.tick / 6) * 1.6;
-    if (d > edge + 1) continue; px(g, d > edge ? '#1a0a2a' : d > edge - 3 ? '#ff6a2a' : d > sr * .55 ? '#ffa030' : d > sr * .3 ? '#ffd84a' : '#fff4a0', CX + x, CY + y);
+    const SC = OB_SYS[ob.sys % OB_SYS.length].sun; if (d > edge + 1) continue; px(g, d > edge ? '#1a0a2a' : d > edge - 3 ? SC[0] : d > sr * .55 ? SC[1] : d > sr * .3 ? SC[2] : SC[3], CX + x, CY + y);
   }
   const eye = warn || burn ? '#1a0a2a' : null; if (eye) { px(g, eye, CX - 8, CY - 4, 4, 4); px(g, eye, CX + 4, CY - 4, 4, 4); px(g, eye, CX - 4, CY + 5, 8, 3); }
   for (const gm of ob.gems) { const [x, y] = obPos(gm.ring, gm.a); g.drawImage(OB_GEM, Math.round(x - 3), Math.round(y - 4 + Math.sin(ob.tick / 8 + gm.a * 3))); }
+  for (const it of ob.items) { const [x, y] = obPos(it.ring, it.a), c = OB_BONUS[it.kind].c, b = Math.round(Math.sin(ob.tick / 8) * 1.5); if (it.life < 180 && (ob.tick >> 3) % 2) continue;
+    px(g, '#05020f', x - 5, y - 5 + b, 11, 11); px(g, c, x - 4, y - 4 + b, 9, 9); px(g, '#05020f', x - 2, y - 2 + b, 5, 5); px(g, c, x - 1, y - 1 + b, 3, 3); }
+  for (const s of ob.shots) { px(g, '#fff4a0', s.x - 1, s.y - 1, 2, 2); px(g, '#ffd84a', s.x - s.vx / 2, s.y - s.vy / 2, 1, 1); }
+  for (const b of ob.bits) px(g, b.c, b.x, b.y, 1, 1);
   for (const k of ob.rocks) g.drawImage(OB_ROCKS[k.s], Math.round(k.x - k.r - 1), Math.round(k.y - k.r - 1));
   // la traînée puis le vaisseau, orienté selon sa course (pas de 1/16 de tour)
   ob.trail.forEach(([x, y], i) => { if (i % 2) px(g, i < 4 ? '#ffa030' : '#5a3a20', x, y, 1, 1); });
   const [sx, sy] = obPos(0, ob.a, ob.r);
-  if (ob.mode !== 'over') { g.save(); g.translate(Math.round(sx), Math.round(sy)); g.rotate(Math.round((ob.a + Math.PI) / (Math.PI / 8)) * (Math.PI / 8)); g.drawImage(OB_SHIP, -4, -4); g.restore(); }
+  if (ob.mode !== 'over' && !(ob.inv && (ob.tick >> 2) % 2)) { const [tx, ty] = obPos(0, ob.a + .01, ob.r), head = Math.atan2(ty - sy, tx - sx) + Math.PI / 2;
+    g.save(); g.translate(Math.round(sx), Math.round(sy)); g.rotate(Math.round(head / (Math.PI / 8)) * (Math.PI / 8)); g.drawImage(OB_SHIP, -4, -4); if (ob.boost && ob.energy > 0) { px(g, '#ffd84a', -2, 5, 1, 3 + (ob.tick % 3)); px(g, '#ffd84a', 1, 5, 1, 3 + (ob.tick % 3)); } g.restore();
+    if (ob.shield) { g.strokeStyle = (ob.tick >> 3) % 2 ? '#5ec8ff' : '#c8f0ff'; g.lineWidth = 1; g.beginPath(); g.arc(Math.round(sx), Math.round(sy), 8, 0, 6.283); g.stroke(); } }
   else for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, d = (20 - ob.boom) * 1.3 + 2; px(g, i % 2 ? '#ffa030' : '#fff4a0', sx + Math.cos(a) * d, sy + Math.sin(a) * d, 2, 2); }
   pxFont(g, String(obScore()), 6, 14, '#ffffff', 12);
   if (ob.combo > 1) pxFont(g, 'x' + ob.combo, W - 6, 14, '#5aff9a', 12, 'right');
+  if (ob.mode === 'play' || ob.mode === 'pause') { px(g, '#05020f', 6, H - 10, 52, 6); px(g, ob.energy < 20 ? '#ff4a5a' : '#ffd84a', 7, H - 9, Math.round(ob.energy / 2), 4);
+    let bx = 64; if (ob.ammo) { pxFont(g, 'TIRS ' + ob.ammo, bx, H - 4, '#ffd84a', 8); bx += 52; } for (const k of ['mag', 'slow']) if (ob[k]) { pxFont(g, OB_BONUS[k].name, bx, H - 4, OB_BONUS[k].c, 8); bx += 52; } }
+  if (ob.banner && ob.mode === 'play') { px(g, 'rgba(7,3,26,.8)', 0, 40, W, 30); pxFont(g, 'SYSTÈME ' + (ob.sys + 1), W / 2, 52, '#b0a8d8', 8, 'center'); pxFont(g, OB_SYS[ob.sys % OB_SYS.length].name, W / 2, 65, OB_SYS[ob.sys % OB_SYS.length].sun[2], 8, 'center'); }
   if (warn) PXK.fill(g, 'ÉRUPTION !', W / 2, 22, Math.floor(ob.tick / 6) % 2 ? '#ff4a5a' : '#ffd84a', PXK.scale(8), 'center');
   if (ob.mode === 'ready') gameText(g, W, [['ORBITE', '#ffa030', 16], ['Espace ou clic pour partir', '#ffffff'], ['↑ dehors · ↓ dedans', '#b0a8d8'], ['Record ' + (games.best.orbite || 0), '#ffd84a']], 236);
   if (ob.mode === 'pause') gameText(g, W, [['PAUSE', '#ffffff', 12], ['Espace pour reprendre', '#b0a8d8']], 240);
   if (ob.mode === 'over' && ob.dead > 20) gameText(g, W, [['PERDU DANS L\'ESPACE', '#ff4a5a', 12], ['Score ' + obScore(), '#ffffff'], ['Cristaux ' + ob.got + ' · ' + Math.floor(ob.t / 60) + ' s', '#5aff9a'], [ob.record ? 'NOUVEAU RECORD !' : 'Record ' + (games.best.orbite || 0), '#ffd84a'], [ob.dead > 40 ? 'Espace pour rejouer' : '', '#b0a8d8']], 216);
 }
 function obInfo() {
-  $('obStats').replaceChildren(...[['Meilleur score', games.best.orbite || 0], ['Parties', obs.games], ['Cristaux au total', obs.gems], ['Éruptions évitées', obs.flares]].flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
+  $('obStats').replaceChildren(...[['Meilleur score', games.best.orbite || 0], ['Parties', obs.games], ['Cristaux au total', obs.gems], ['Éruptions évitées', obs.flares], ['Astéroïdes détruits', obs.rocks], ['Systèmes visités', obs.systems]].flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
 }
 document.addEventListener('keydown', e => {
   if (!view.classList.contains('on') || !ob || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.repeat) return;
-  if ([' ', 'ArrowUp', 'Enter', 'ArrowRight'].includes(e.key)) { e.preventDefault(); obMove(1); }
-  if (['ArrowDown', 'ArrowLeft'].includes(e.key)) { e.preventDefault(); obMove(-1); }
+  if ([' ', 'ArrowUp', 'Enter', 'z', 'w'].includes(e.key)) { e.preventDefault(); obMove(1); }
+  if (['ArrowDown', 's'].includes(e.key)) { e.preventDefault(); obMove(-1); }
+  if (['ArrowRight', 'd'].includes(e.key)) { e.preventDefault(); ob.boost = true; }
+  if (['ArrowLeft', 'q', 'a'].includes(e.key)) { e.preventDefault(); ob.brake = true; }
+  if (e.key.toLowerCase() === 'x' || e.key === 'Shift') { e.preventDefault(); obFire(); }
   if (e.key.toLowerCase() === 'p' && ob.mode === 'play') ob.mode = 'pause';
 });
+document.addEventListener('keyup', e => { if (!ob) return; if (['ArrowRight', 'd'].includes(e.key)) ob.boost = false; if (['ArrowLeft', 'q', 'a'].includes(e.key)) ob.brake = false; });
 $('obCanvas').onpointerdown = e => { e.preventDefault(); if (ob) obMove(e.button === 2 ? -1 : 1); };
 $('obCanvas').oncontextmenu = e => e.preventDefault();
 $('obNew').onclick = () => { obNew(); $('obNew').blur(); };
 $('obFs').onclick = () => { $('obFs').blur(); try { document.fullscreenElement ? document.exitFullscreen() : $('obCanvas').parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
-$('obCanvas').__ob = {st: () => ob, OB};
+$('obCanvas').__ob = {st: () => ob, OB, fire: () => obFire(), pos: obPos};
 {  // vérification : un astéroïde sur le vaisseau le détruit ; l'éruption brûle l'orbite intérieure seulement
   const keep = ob, realBest = games.best.orbite, realStats = {...obs}; ob = null;
   obNew(); ob.mode = 'play'; ob.spawn = 1e9; const [x, y] = obPos(1, ob.a + obSpeed()); ob.rocks = [{x, y, vx: 0, vy: 0, s: 0, r: 5, life: 99}]; obUpdate(); const hit = ob.mode === 'over';
   obNew(); ob.mode = 'play'; ob.spawn = 1e9; ob.ring = 0; ob.r = OB.RINGS[0]; ob.flare = 1; obUpdate(); obUpdate(); const burnt = ob.mode === 'over';
   obNew(); ob.mode = 'play'; ob.spawn = 1e9; ob.ring = 2; ob.r = OB.RINGS[2]; ob.gems = []; ob.flare = 1; for (let i = 0; i < 130; i++) obUpdate(); const safe = ob.mode === 'play' && ob.flare > 0;
-  console.assert(hit && burnt && safe, 'orbite', {hit, burnt, safe});
+  const bad = [];
+  for (let s = 0; s < OB_SYS.length; s++) for (let rot = 0; rot < 6.3; rot += .5) { ob.e = OB_SYS[s].e; ob.rot = rot; for (let a = 0; a < 6.3; a += .2) { const [x, y] = obPos(2, a); if (x < 8 || x > OB.W - 8 || y < 14 || y > OB.H - 4) { bad.push('orbite hors champ ' + s); break; } } }
+  obNew(); ob.mode = 'play'; ob.spawn = ob.nItem = 1e9; ob.shield = 1; const [hx, hy] = obPos(1, ob.a + obSpeed()); ob.rocks = [{x: hx, y: hy, vx: 0, vy: 0, s: 0, r: 5, life: 99}]; obUpdate(); if (ob.mode !== 'play' || ob.shield || ob.rocks.length) bad.push('bouclier');
+  obNew(); ob.mode = 'play'; ob.spawn = ob.nItem = 1e9; ob.ammo = 1; const [ax, ay] = obPos(1, ob.a + .25); ob.rocks = [{x: ax, y: ay, vx: 0, vy: 0, s: 1, r: 7, life: 99}]; obFire(); for (let i = 0; i < 20; i++) obUpdate(); if (ob.kills !== 1 || ob.ammo || ob.mode !== 'play') bad.push('canon ' + ob.kills);
+  obNew(); ob.mode = 'play'; ob.spawn = ob.nItem = 1e9; ob.boost = true; const a0 = ob.a; obUpdate(); const fast = ob.a - a0; ob.boost = false; ob.brake = true; const a1 = ob.a; obUpdate(); const slow = ob.a - a1;
+  if (!(fast > slow * 3) || ob.energy >= 100) bad.push('turbo et frein');
+  obNew(); ob.mode = 'play'; ob.spawn = ob.nItem = 1e9; ob.flare = 1e9; ob.t = OB_SYSLEN - 1; obUpdate(); if (ob.sys !== 1 || !ob.banner) bad.push('système suivant'); for (let i = 0; i < 600; i++) obUpdate(); if (ob.e < .1) bad.push('ellipse ' + ob.e.toFixed(2));
+  obNew(); ob.mode = 'play'; ob.spawn = 1e9; ob.items = [{ring: 1, a: ob.a + obSpeed(), kind: 'mag', life: 99}]; obUpdate(); if (!ob.mag) bad.push('bonus aimant');
+  console.assert(hit && burnt && safe && !bad.length, 'orbite', {hit, burnt, safe, bad});
   if (realBest === undefined) delete games.best.orbite; else games.best.orbite = realBest; Object.assign(obs, realStats);
-  ob = keep;
+  ob = keep; $('obCanvas').__obBad = bad;
 }
 ctx.onOpen(() => {
   if (!ob || !ob.g) { obNew(); ob.g = $('obCanvas').getContext('2d'); }

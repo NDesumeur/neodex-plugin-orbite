@@ -4,10 +4,18 @@ Un jeu d'adresse à une touche : ton vaisseau tourne tout seul autour d'un solei
 
 *English version: [README.en.md](README.en.md)*
 
+## Systèmes stellaires, turbo, canon et bonus (nouveau en 1.2.0)
+
+- Toutes les 40 secondes, un **nouveau système** : soleil jaune, naine rouge, pulsar, géante bleue. Les orbites s'étirent en **ellipses**, et certaines tournent lentement.
+- **→** (maintenu) : **turbo**, il use l'énergie (la jauge en bas) mais les points comptent double. **←** : **frein**.
+- Des **bonus** sur les orbites : **bouclier** (un choc), **aimant** (les cristaux viennent à toi), **ralenti** (les astéroïdes traînent) et **canon** : 5 tirs avec **X**, 5 points par astéroïde détruit.
+
 ## Commandes
 
 - **Espace**, **clic** ou **↑** : passer à l'orbite extérieure suivante (depuis la plus éloignée, on revient à la plus proche du soleil).
 - **↓** ou **clic droit** : passer à l'orbite intérieure.
+- **→** maintenu : turbo · **←** maintenu : frein.
+- **X** ou **Maj** : tirer (avec le bonus canon).
 - **P** : pause.
 - **Espace** ou **clic** : partir, puis rejouer après une collision.
 
