@@ -1,7 +1,7 @@
 {
   "id": "neodex.orbite",
   "name": "Orbite",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "NDesumeur",
   "description": "Jeu d'adresse à une touche : ton vaisseau tourne seul autour d'un soleil sur trois orbites, tu choisis seulement laquelle. Évite les astéroïdes qui traversent l'écran, quitte l'orbite intérieure quand le soleil clignote avant l'éruption, ramasse les cristaux à la suite pour un multiplicateur jusqu'à ×5. La vitesse monte, record et statistiques gardés. Plein écran et jeu à la taille de l'écran. Des systèmes stellaires aux orbites en ellipse, un turbo, un frein, un canon et quatre bonus.",
   "icon": "icon.png",
@@ -22,5 +22,46 @@
   "sdk": "2.1.0",
   "permissions": [
     "storage"
+  ],
+  "succes": [
+    {
+      "id": "premier",
+      "nom": "Mise en orbite",
+      "texte": "Finir une première partie"
+    },
+    {
+      "id": "systeme",
+      "nom": "Système suivant",
+      "texte": "Atteindre un nouveau système solaire"
+    },
+    {
+      "id": "systemes10",
+      "nom": "Voyageur interstellaire",
+      "texte": "Atteindre 10 systèmes solaires en tout"
+    },
+    {
+      "id": "s500",
+      "nom": "Bonne trajectoire",
+      "texte": "Marquer 500 points en une partie"
+    },
+    {
+      "id": "s2000",
+      "nom": "Gravité zéro",
+      "texte": "Marquer 2 000 points en une partie",
+      "cache": true
+    },
+    {
+      "id": "gemmes",
+      "nom": "Collecteur d'étoiles",
+      "texte": "Ramasser 300 gemmes en tout"
+    }
+  ],
+  "records": [
+    {
+      "id": "score",
+      "nom": "Meilleur score",
+      "sens": "haut",
+      "format": "nombre"
+    }
   ]
 }

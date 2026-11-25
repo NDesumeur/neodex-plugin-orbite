@@ -304,6 +304,9 @@ export default async function (ctx) {
   const saveGames = () => { clearTimeout(gamesTimer); gamesTimer = setTimeout(() => { gamesTimer = null; folder.write('games', games).catch(() => {}); }, 500); };
   const best = (k, v) => { const b = games.best[k]; if (b == null || v > b) { games.best[k] = v; saveGames(); return true; } return false; };
   const gstore = (k, init) => (games[k] ??= init);
+  // les trophées de NeoDex (3.4.8 et plus) : succès et records déclarés dans plugin.json ; sur un NeoDex plus ancien, rien ne se passe
+  const trophy = id => { ctx.games?.unlock(id).catch(() => {}); };
+  const trophyRecord = (id, v) => { if (v != null && Number.isFinite(+v)) ctx.games?.record(id, +v).catch(() => {}); };
 function gameLoop(st, appKey, update, draw) {
   cancelAnimationFrame(st.raf);
   const STEP = 1000 / 60; let acc = 0, last = performance.now();
@@ -448,6 +451,7 @@ function obDraw() {
   if (ob.mode === 'over' && ob.dead > 20) gameText(g, W, [['PERDU DANS L\'ESPACE', '#ff4a5a', 12], ['Score ' + obScore(), '#ffffff'], ['Cristaux ' + ob.got + ' · ' + Math.floor(ob.t / 60) + ' s', '#5aff9a'], [ob.record ? 'NOUVEAU RECORD !' : 'Record ' + (games.best.orbite || 0), '#ffd84a'], [ob.dead > 40 ? 'Espace pour rejouer' : '', '#b0a8d8']], 216);
 }
 function obInfo() {
+  setTimeout(obTrophies);
   $('obStats').replaceChildren(...[['Meilleur score', games.best.orbite || 0], ['Parties', obs.games], ['Cristaux au total', obs.gems], ['Éruptions évitées', obs.flares], ['Astéroïdes détruits', obs.rocks], ['Systèmes visités', obs.systems]].flatMap(([a, b]) => [el('span', '', a), el('b', '', String(b))]));
 }
 document.addEventListener('keydown', e => {
@@ -481,6 +485,13 @@ $('obCanvas').__ob = {st: () => ob, OB, fire: () => obFire(), pos: obPos};
   console.assert(hit && burnt && safe && !bad.length, 'orbite', {hit, burnt, safe, bad});
   if (realBest === undefined) delete games.best.orbite; else games.best.orbite = realBest; Object.assign(obs, realStats);
   ob = keep; $('obCanvas').__obBad = bad;
+}
+// les trophées, tirés des statistiques et des records gardés (aussi à l'ouverture : ce qui a été fait avant compte)
+function obTrophies() {
+  const b = games.best.orbite, sig = [b, obs.games, obs.systems, obs.gems].join(); if (sig === obTrophies.sig) return; obTrophies.sig = sig;
+  trophyRecord('score', b || null);
+  if (b != null) trophy('premier'); if (obs.systems >= 1) trophy('systeme'); if (obs.systems >= 10) trophy('systemes10');
+  if (b >= 500) trophy('s500'); if (b >= 2000) trophy('s2000'); if (obs.gems >= 300) trophy('gemmes');
 }
 ctx.onOpen(() => {
   if (!ob || !ob.g) { obNew(); ob.g = $('obCanvas').getContext('2d'); }
